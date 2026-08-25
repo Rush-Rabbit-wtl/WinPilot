@@ -45,6 +45,42 @@ public class CatalogTests
     }
 
     [Fact]
+    public void BuiltInSoftwareEntriesUseUniqueHttpsUrls()
+    {
+        Assert.Equal(SoftwareCatalogStore.BuiltIns.Count,
+            SoftwareCatalogStore.BuiltIns.Select(x => x.Id).Distinct().Count());
+        Assert.All(SoftwareCatalogStore.BuiltIns, entry =>
+        {
+            Assert.True(SoftwareCatalogStore.IsValid(entry.Name, entry.DownloadUrl, out var error), error);
+            Assert.True(entry.IsBuiltIn);
+        });
+        Assert.False(SoftwareCatalogStore.IsValid("Unsafe", "http://example.com/app.exe", out _));
+        Assert.False(SoftwareCatalogStore.IsValid("Local", "https://localhost/app.exe", out _));
+        Assert.False(SoftwareCatalogStore.IsValid("Credential", "https://user:password@example.com/app.exe", out _));
+    }
+
+    [Fact]
+    public void CustomSoftwareCatalogRoundTrips()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "WinPilotTests", Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(root, "catalog.json");
+        try
+        {
+            var store = new SoftwareCatalogStore(path);
+            store.Add("Example Tool", "https://example.com/tool.exe", "test entry");
+            var entry = Assert.Single(store.LoadCustom());
+            Assert.Equal("Example Tool", entry.Name);
+            Assert.False(entry.IsBuiltIn);
+            store.Remove(entry.Id);
+            Assert.Empty(store.LoadCustom());
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public void SnapshotRoundTrips()
     {
         var store = new SnapshotStore();

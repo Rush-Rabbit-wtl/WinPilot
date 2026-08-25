@@ -6,6 +6,8 @@ WinPilot 是一个面向 Windows 11 的安全、可回滚系统设置工具。�
 
 - 16 项资源管理器、任务栏、隐私、性能、Edge 和更新设置；
 - 11 项可选 Windows 服务状态检测、禁用与精确恢复；
+- 内置 Steam、Visual Studio Code、Google Chrome 示例的软件下载安装目录；
+- 可保存自定义“软件名称 + HTTPS 下载地址 + 说明”；
 - 分类导航与实时搜索；
 - 自动检测当前状态；
 - 低/中风险分级和操作前影响预览；
@@ -18,6 +20,8 @@ WinPilot 是一个面向 Windows 11 的安全、可回滚系统设置工具。�
 WinPilot 首版不会禁用 Defender、SmartScreen、UAC，不删除受保护 AppX，也不修改 BCD、驱动或系统文件 ACL。
 
 服务管理只收录诊断、离线地图、传真、零售演示、Xbox、搜索、SysMain 和打印等可选服务。RPC、事件日志、网络核心组件、WMI 等关键服务不进入目录。服务禁用前会记录启动类型、延迟启动标志和运行状态；“按快照恢复”不会猜测系统默认值。
+
+软件下载文件保存在 `%USERPROFILE%\Downloads\WinPilot`。下载器只接受 HTTPS，限制单文件最大 2 GB，下载时使用 `.part` 临时文件并在完成后计算 SHA-256。程序不会自动启动下载的安装包，运行前仍应核对来源、哈希和数字签名。自定义目录保存在 `%LOCALAPPDATA%\WinPilot\software-catalog.json`。
 
 ## 运行
 

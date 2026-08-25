@@ -19,10 +19,14 @@ public partial class MainWindow : Window
     private readonly SnapshotStore _snapshots = new();
     private readonly RegistryTweakEngine _engine;
     private readonly ServiceTweakEngine _serviceEngine;
+    private readonly SoftwareCatalogStore _softwareStore = new();
+    private readonly SoftwareDownloader _softwareDownloader = new();
     private readonly ObservableCollection<TweakItem> _items;
     private readonly ObservableCollection<ServiceItem> _serviceItems;
+    private readonly ObservableCollection<SoftwareItem> _softwareItems;
     private readonly ICollectionView _view;
     private readonly ICollectionView _serviceView;
+    private readonly ICollectionView _softwareView;
     private string _category = "全部";
 
     public MainWindow()
@@ -32,12 +36,16 @@ public partial class MainWindow : Window
         _serviceEngine = new ServiceTweakEngine(_snapshots);
         _items = new(TweakCatalog.All.Select(x => new TweakItem(x)));
         _serviceItems = new(OptionalServiceCatalog.All.Select(x => new ServiceItem(x)));
+        _softwareItems = new(_softwareStore.LoadAll().Select(x => new SoftwareItem(x)));
         _view = CollectionViewSource.GetDefaultView(_items);
         _view.Filter = FilterItem;
         _serviceView = CollectionViewSource.GetDefaultView(_serviceItems);
         _serviceView.Filter = FilterService;
+        _softwareView = CollectionViewSource.GetDefaultView(_softwareItems);
+        _softwareView.Filter = FilterSoftware;
         TweakList.ItemsSource = _view;
         ServiceList.ItemsSource = _serviceView;
+        SoftwareList.ItemsSource = _softwareView;
         Loaded += async (_, _) =>
         {
             await RefreshStatesAsync();
@@ -72,6 +80,13 @@ public partial class MainWindow : Window
         return query.Length == 0 || item.SearchText.Contains(query, StringComparison.CurrentCultureIgnoreCase);
     }
 
+    private bool FilterSoftware(object value)
+    {
+        var item = (SoftwareItem)value;
+        var query = SearchBox?.Text?.Trim() ?? "";
+        return query.Length == 0 || item.SearchText.Contains(query, StringComparison.CurrentCultureIgnoreCase);
+    }
+
     private async Task RefreshStatesAsync()
     {
         StatusText.Text = "正在检测系统状态…";
@@ -89,10 +104,13 @@ public partial class MainWindow : Window
     private void UpdateSummary()
     {
         var services = ServiceScroll.Visibility == Visibility.Visible;
-        CountText.Text = services ? _serviceItems.Count(x => x.Info.Available).ToString() : _items.Count.ToString();
-        EnabledLabel.Text = services ? "已禁用" : "已启用";
+        var software = SoftwareScroll.Visibility == Visibility.Visible;
+        CountText.Text = services ? _serviceItems.Count(x => x.Info.Available).ToString()
+            : software ? _softwareItems.Count.ToString() : _items.Count.ToString();
+        EnabledLabel.Text = services ? "已禁用" : software ? "自定义" : "已启用";
         EnabledText.Text = services
             ? _serviceItems.Count(x => x.Info.Available && x.Info.StartMode == System.ServiceProcess.ServiceStartMode.Disabled).ToString()
+            : software ? _softwareItems.Count(x => !x.Entry.IsBuiltIn).ToString()
             : _items.Count(x => x.State == TweakState.Enabled).ToString();
         SnapshotText.Text = _snapshots.List().Count.ToString();
     }
@@ -104,11 +122,14 @@ public partial class MainWindow : Window
     {
         _category = category;
         var services = _category == "服务管理";
-        TweakScroll.Visibility = services ? Visibility.Collapsed : Visibility.Visible;
+        var software = _category == "软件下载";
+        TweakScroll.Visibility = services || software ? Visibility.Collapsed : Visibility.Visible;
         ServiceScroll.Visibility = services ? Visibility.Visible : Visibility.Collapsed;
+        SoftwareScroll.Visibility = software ? Visibility.Visible : Visibility.Collapsed;
         PageTitle.Text = _category == "全部" ? "系统调优" : _category;
         _view.Refresh();
         _serviceView.Refresh();
+        _softwareView.Refresh();
         UpdateSummary();
     }
 
@@ -116,6 +137,7 @@ public partial class MainWindow : Window
     {
         _view?.Refresh();
         _serviceView?.Refresh();
+        _softwareView?.Refresh();
     }
     private async void Apply_Click(object sender, RoutedEventArgs e) => await ChangeAsync((TweakItem)((Button)sender).Tag, true);
     private async void RestoreDefault_Click(object sender, RoutedEventArgs e) => await ChangeAsync((TweakItem)((Button)sender).Tag, false);
@@ -214,6 +236,88 @@ public partial class MainWindow : Window
         catch (Exception ex) { MessageBox.Show(ex.Message, "服务恢复失败", MessageBoxButton.OK, MessageBoxImage.Warning); StatusText.Text = ex.Message; }
     }
 
+    private void AddSoftware_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            _softwareStore.Add(SoftwareNameBox.Text, SoftwareUrlBox.Text, SoftwareDescriptionBox.Text);
+            ReloadSoftwareCatalog();
+            SoftwareNameBox.Clear();
+            SoftwareUrlBox.Clear();
+            SoftwareDescriptionBox.Clear();
+            StatusText.Text = "自定义软件已保存到本地目录。";
+        }
+        catch (Exception ex) { MessageBox.Show(ex.Message, "无法保存软件", MessageBoxButton.OK, MessageBoxImage.Warning); }
+    }
+
+    private async void DownloadSoftware_Click(object sender, RoutedEventArgs e)
+    {
+        var item = (SoftwareItem)((Button)sender).Tag;
+        var uri = new Uri(item.Entry.DownloadUrl);
+        if (MessageBox.Show($"下载“{item.Entry.Name}”？\n\n来源：{uri.Host}\n保存到：{_softwareDownloader.DownloadDirectory}\n\nWinPilot 只保存文件，不会自动运行。",
+            "确认下载", MessageBoxButton.OKCancel, MessageBoxImage.Information) != MessageBoxResult.OK) return;
+        item.IsBusy = true;
+        item.StatusText = "正在连接…";
+        item.StatusForeground = Brushes.LightSkyBlue;
+        try
+        {
+            var progress = new Progress<DownloadProgress>(p =>
+            {
+                item.ProgressValue = p.Percentage;
+                item.StatusText = p.TotalBytes is > 0
+                    ? $"已下载 {FormatBytes(p.BytesReceived)} / {FormatBytes(p.TotalBytes.Value)}"
+                    : $"已下载 {FormatBytes(p.BytesReceived)}";
+            });
+            var result = await _softwareDownloader.DownloadAsync(item.Entry, progress);
+            item.ProgressValue = 100;
+            item.StatusForeground = (Brush)FindResource("Accent");
+            item.StatusText = $"下载完成 · {Path.GetFileName(result.FilePath)} · SHA-256 {result.Sha256[..12]}…";
+            StatusText.Text = $"{item.Entry.Name} 已下载到 {result.FilePath}";
+            MessageBox.Show($"下载完成。\n\n文件：{result.FilePath}\n大小：{FormatBytes(result.Size)}\nSHA-256：{result.Sha256}\n\n运行前请核对来源和数字签名。",
+                "下载完成", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            item.StatusForeground = Brushes.OrangeRed;
+            item.StatusText = "下载失败：" + ex.Message;
+        }
+        finally { item.IsBusy = false; }
+    }
+
+    private void DeleteSoftware_Click(object sender, RoutedEventArgs e)
+    {
+        var item = (SoftwareItem)((Button)sender).Tag;
+        if (item.Entry.IsBuiltIn) return;
+        if (MessageBox.Show($"从自定义目录删除“{item.Entry.Name}”？\n不会删除已经下载的文件。", "删除目录项",
+            MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        _softwareStore.Remove(item.Entry.Id);
+        ReloadSoftwareCatalog();
+        StatusText.Text = "自定义目录项已删除。";
+    }
+
+    private void OpenDownloads_Click(object sender, RoutedEventArgs e)
+    {
+        Directory.CreateDirectory(_softwareDownloader.DownloadDirectory);
+        Process.Start(new ProcessStartInfo("explorer.exe", _softwareDownloader.DownloadDirectory) { UseShellExecute = true });
+    }
+
+    private void ReloadSoftwareCatalog()
+    {
+        _softwareItems.Clear();
+        foreach (var entry in _softwareStore.LoadAll()) _softwareItems.Add(new SoftwareItem(entry));
+        _softwareView.Refresh();
+        UpdateSummary();
+    }
+
+    private static string FormatBytes(long value)
+    {
+        string[] units = ["B", "KB", "MB", "GB"];
+        var size = (double)value;
+        var index = 0;
+        while (size >= 1024 && index < units.Length - 1) { size /= 1024; index++; }
+        return $"{size:0.##} {units[index]}";
+    }
+
     private void SaveVisual(string path)
     {
         var width = Math.Max(1, (int)ActualWidth);
@@ -225,6 +329,30 @@ public partial class MainWindow : Window
         using var stream = File.Create(path);
         encoder.Save(stream);
     }
+}
+
+public sealed class SoftwareItem : INotifyPropertyChanged
+{
+    private bool _isBusy;
+    private double _progressValue;
+    private string _statusText = "等待下载";
+    private Brush _statusForeground = new SolidColorBrush(Color.FromRgb(101, 117, 141));
+    public SoftwareEntry Entry { get; }
+    public string Initial => string.IsNullOrWhiteSpace(Entry.Name) ? "?" : Entry.Name[..1].ToUpperInvariant();
+    public string SourceLabel => Entry.IsBuiltIn ? "示例目录" : "自定义";
+    public string HostText => Uri.TryCreate(Entry.DownloadUrl, UriKind.Absolute, out var uri) ? $"HTTPS · {uri.Host}" : "地址无效";
+    public string SearchText => $"{Entry.Name} {Entry.Description} {Entry.DownloadUrl}";
+    public bool IsBusy { get => _isBusy; set { _isBusy = value; Changed(); Changed(nameof(CanDownload)); Changed(nameof(DownloadButtonText)); Changed(nameof(ProgressVisibility)); } }
+    public bool CanDownload => !IsBusy;
+    public string DownloadButtonText => IsBusy ? "下载中…" : "下载";
+    public double ProgressValue { get => _progressValue; set { _progressValue = value; Changed(); Changed(nameof(ProgressVisibility)); } }
+    public Visibility ProgressVisibility => IsBusy || ProgressValue > 0 ? Visibility.Visible : Visibility.Collapsed;
+    public string StatusText { get => _statusText; set { _statusText = value; Changed(); } }
+    public Brush StatusForeground { get => _statusForeground; set { _statusForeground = value; Changed(); } }
+    public Visibility DeleteVisibility => Entry.IsBuiltIn ? Visibility.Collapsed : Visibility.Visible;
+    public SoftwareItem(SoftwareEntry entry) => Entry = entry;
+    public event PropertyChangedEventHandler? PropertyChanged;
+    private void Changed([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new(name));
 }
 
 public sealed class ServiceItem : INotifyPropertyChanged
