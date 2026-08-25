@@ -24,13 +24,14 @@
                     <Button Style="{StaticResource NavButton}" Content="◫  服务管理" Tag="服务管理" Click="Category_Click"/>
                     <Button Style="{StaticResource NavButton}" Content="▦  应用" Tag="应用" Click="Category_Click"/>
                     <Button Style="{StaticResource NavButton}" Content="⇩  软件下载" Tag="软件下载" Click="Category_Click"/>
+                    <Button Style="{StaticResource NavButton}" Content="◆  开荒方案" Tag="开荒方案" Click="Category_Click"/>
                     <Button Style="{StaticResource NavButton}" Content="↻  更新" Tag="更新" Click="Category_Click"/>
                 </StackPanel>
                 <StackPanel Grid.Row="3">
                     <Border Background="#111D30" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,0,0,12">
                         <StackPanel><TextBlock Text="安全策略" Foreground="{StaticResource Accent}" FontWeight="Bold"/><TextBlock Text="每次修改均先创建 JSON 快照；写入失败会立即回滚。" TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,5,0,0"/></StackPanel>
                     </Border>
-                    <TextBlock Text="v0.3.0 · .NET 8" Foreground="#526078" FontSize="10"/>
+                    <TextBlock Text="v0.4.0 · .NET 8" Foreground="#526078" FontSize="10"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -90,16 +91,16 @@
                     <Border Background="#111D30" BorderBrush="#294365" BorderThickness="1" CornerRadius="12" Padding="18" Margin="0,0,0,12">
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                            <StackPanel><TextBlock Text="添加自定义软件" FontSize="16" FontWeight="SemiBold"/><TextBlock Text="保存软件名称与 HTTPS 下载地址；下载后不会自动运行。" Foreground="{StaticResource TextMuted}" Margin="0,5,0,0"/></StackPanel>
+                            <StackPanel><TextBlock Text="便携式软件目录" FontSize="16" FontWeight="SemiBold"/><TextBlock Text="支持 HTTPS、局域网 HTTP 和 UNC 共享路径；配置会随发布目录一起复制。" Foreground="{StaticResource TextMuted}" Margin="0,5,0,0"/><TextBlock x:Name="SoftwareConfigPathText" Foreground="#65758D" FontSize="10" Margin="0,5,0,0" TextTrimming="CharacterEllipsis"/></StackPanel>
                             <Grid Grid.Row="1" Margin="0,14,0,10">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="1.1*"/><ColumnDefinition Width="2.2*"/><ColumnDefinition Width="1.5*"/></Grid.ColumnDefinitions>
                                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                                <TextBlock Text="软件名称" Foreground="{StaticResource TextMuted}" FontSize="10" Margin="2,0,0,5"/><TextBlock Grid.Column="1" Text="HTTPS 下载地址" Foreground="{StaticResource TextMuted}" FontSize="10" Margin="2,0,0,5"/><TextBlock Grid.Column="2" Text="简短说明（可选）" Foreground="{StaticResource TextMuted}" FontSize="10" Margin="2,0,0,5"/>
+                                <TextBlock Text="软件名称" Foreground="{StaticResource TextMuted}" FontSize="10" Margin="2,0,0,5"/><TextBlock Grid.Column="1" Text="来源：HTTPS / LAN HTTP / UNC" Foreground="{StaticResource TextMuted}" FontSize="10" Margin="2,0,0,5"/><TextBlock Grid.Column="2" Text="简短说明（可选）" Foreground="{StaticResource TextMuted}" FontSize="10" Margin="2,0,0,5"/>
                                 <TextBox x:Name="SoftwareNameBox" Grid.Row="1" ToolTip="软件名称" Margin="0,0,8,0"/>
                                 <TextBox x:Name="SoftwareUrlBox" Grid.Row="1" Grid.Column="1" ToolTip="HTTPS 下载地址" Margin="0,0,8,0"/>
                                 <TextBox x:Name="SoftwareDescriptionBox" Grid.Row="1" Grid.Column="2" ToolTip="简短说明（可选）"/>
                             </Grid>
-                            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right"><Button Content="打开下载目录" Click="OpenDownloads_Click" Margin="0,0,8,0"/><Button Content="保存自定义项" Click="AddSoftware_Click" Background="{StaticResource AccentDark}" BorderBrush="#2C685B"/></StackPanel>
+                            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right"><Button Content="编辑 JSON 配置" Click="EditSoftwareConfig_Click" Margin="0,0,8,0"/><Button Content="重新加载配置" Click="ReloadSoftwareConfig_Click" Margin="0,0,8,0"/><Button Content="打开下载目录" Click="OpenDownloads_Click" Margin="0,0,8,0"/><Button Content="保存自定义项" Click="AddSoftware_Click" Background="{StaticResource AccentDark}" BorderBrush="#2C685B"/></StackPanel>
                         </Grid>
                     </Border>
                     <ItemsControl x:Name="SoftwareList">
@@ -111,16 +112,46 @@
                                         <StackPanel Grid.Column="1">
                                             <StackPanel Orientation="Horizontal"><TextBlock Text="{Binding Entry.Name}" FontSize="16" FontWeight="SemiBold"/><Border Background="#21324B" CornerRadius="10" Padding="8,3" Margin="9,0,0,0"><TextBlock Text="{Binding SourceLabel}" FontSize="10" Foreground="#AFC4DD"/></Border></StackPanel>
                                             <TextBlock Text="{Binding Entry.Description}" Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="0,7,20,0"/>
-                                            <TextBlock Text="{Binding HostText}" Foreground="#65758D" FontSize="10" Margin="0,6,0,0" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding HostText}" Foreground="#65758D" FontSize="10" Margin="0,6,0,0" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding InstallText}" Foreground="#65758D" FontSize="10" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
                                             <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusForeground}" FontSize="10" Margin="0,5,0,0" TextTrimming="CharacterEllipsis"/>
                                             <ProgressBar Height="4" Maximum="100" Value="{Binding ProgressValue}" Visibility="{Binding ProgressVisibility}" Margin="0,7,25,0"/>
                                         </StackPanel>
-                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"><Button Content="{Binding DownloadButtonText}" Click="DownloadSoftware_Click" Tag="{Binding}" IsEnabled="{Binding CanDownload}" Background="{StaticResource AccentDark}" BorderBrush="#2C685B" Margin="0,0,8,0"/><Button Content="删除" Click="DeleteSoftware_Click" Tag="{Binding}" Visibility="{Binding DeleteVisibility}"/></StackPanel>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"><Button Content="{Binding DownloadButtonText}" Click="DownloadSoftware_Click" Tag="{Binding}" IsEnabled="{Binding CanDownload}" Background="{StaticResource AccentDark}" BorderBrush="#2C685B" Margin="0,0,8,0"/><Button Content="安装" Click="InstallSoftware_Click" Tag="{Binding}" IsEnabled="{Binding CanInstall}" Visibility="{Binding InstallVisibility}" Margin="0,0,8,0"/><Button Content="删除" Click="DeleteSoftware_Click" Tag="{Binding}" Visibility="{Binding DeleteVisibility}"/></StackPanel>
                                     </Grid>
                                 </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
+            <ScrollViewer x:Name="ProvisioningScroll" Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
+                <StackPanel>
+                    <Border Background="#111D30" BorderBrush="#294365" BorderThickness="1" CornerRadius="12" Padding="22" Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Text="可迁移的电脑开荒方案" FontSize="20" FontWeight="SemiBold"/>
+                            <TextBlock Text="把发布目录整个复制到新电脑，方案和软件目录会一起带走。应用系统设置、下载软件、运行安装均分步确认。" Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="0,7,0,0"/>
+                            <TextBlock x:Name="ProfilePathText" Foreground="#65758D" FontSize="10" Margin="0,7,0,0" TextTrimming="CharacterEllipsis"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                                <Button Content="编辑方案 JSON" Click="EditProfile_Click" Margin="0,0,8,0"/>
+                                <Button Content="重新加载" Click="ReloadProfile_Click" Margin="0,0,8,0"/>
+                                <Button Content="捕获本机状态" Click="CaptureProfile_Click" Margin="0,0,8,0"/>
+                                <Button Content="应用系统配置" Click="ApplyProfile_Click" Background="{StaticResource AccentDark}" BorderBrush="#2C685B" Margin="0,0,8,0"/>
+                                <Button Content="下载方案软件" Click="DownloadProfileSoftware_Click"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="22">
+                        <StackPanel>
+                            <TextBlock x:Name="ProfileNameText" Text="开荒方案" FontSize="18" FontWeight="SemiBold"/>
+                            <TextBlock Text="系统设置" Foreground="{StaticResource Accent}" FontWeight="SemiBold" Margin="0,18,0,5"/>
+                            <TextBlock x:Name="ProfileTweaksText" Foreground="{StaticResource TextMuted}" TextWrapping="Wrap"/>
+                            <TextBlock Text="将禁用的可选服务" Foreground="#FBBF24" FontWeight="SemiBold" Margin="0,18,0,5"/>
+                            <TextBlock x:Name="ProfileServicesText" Foreground="{StaticResource TextMuted}" TextWrapping="Wrap"/>
+                            <TextBlock Text="需要下载的软件" Foreground="#7DD3FC" FontWeight="SemiBold" Margin="0,18,0,5"/>
+                            <TextBlock x:Name="ProfileSoftwareText" Foreground="{StaticResource TextMuted}" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="ProfileWarningsText" Foreground="#FB923C" TextWrapping="Wrap" Margin="0,18,0,0"/>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </ScrollViewer>
             <Grid Grid.Row="4" Margin="0,14,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock x:Name="StatusText" Text="准备就绪" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/><StackPanel Grid.Column="1" Orientation="Horizontal"><Button Content="打开快照目录" Click="OpenSnapshots_Click" Margin="0,0,8,0"/><Button Content="回滚最近更改" Click="RollbackLatest_Click" Margin="0,0,8,0"/><Button Content="重启资源管理器" Click="RestartExplorer_Click"/></StackPanel></Grid>

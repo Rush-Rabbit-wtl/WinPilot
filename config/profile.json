@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "name": "我的电脑开荒方案",
+  "enableTweaks": [
+    "show-extensions",
+    "show-hidden",
+    "disable-suggestions",
+    "disable-ad-id"
+  ],
+  "disableServices": [],
+  "software": [
+    "vscode",
+    "chrome"
+  ]
+}

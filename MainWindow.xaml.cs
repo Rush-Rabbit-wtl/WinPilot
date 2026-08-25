@@ -21,6 +21,8 @@ public partial class MainWindow : Window
     private readonly ServiceTweakEngine _serviceEngine;
     private readonly SoftwareCatalogStore _softwareStore = new();
     private readonly SoftwareDownloader _softwareDownloader = new();
+    private readonly ProvisioningProfileStore _profileStore = new();
+    private ProvisioningProfile _profile = ProvisioningProfileStore.Default();
     private readonly ObservableCollection<TweakItem> _items;
     private readonly ObservableCollection<ServiceItem> _serviceItems;
     private readonly ObservableCollection<SoftwareItem> _softwareItems;
@@ -46,6 +48,15 @@ public partial class MainWindow : Window
         TweakList.ItemsSource = _view;
         ServiceList.ItemsSource = _serviceView;
         SoftwareList.ItemsSource = _softwareView;
+        SoftwareConfigPathText.Text = _softwareStore.CatalogPath;
+        ProfilePathText.Text = _profileStore.ProfilePath;
+        try { ReloadProfileView(); }
+        catch (Exception ex)
+        {
+            ProfileNameText.Text = "方案配置无法读取";
+            ProfileTweaksText.Text = ProfileServicesText.Text = ProfileSoftwareText.Text = "（无）";
+            ProfileWarningsText.Text = ex.Message + " 请编辑 profile.json 后重新加载。";
+        }
         Loaded += async (_, _) =>
         {
             await RefreshStatesAsync();
@@ -105,12 +116,14 @@ public partial class MainWindow : Window
     {
         var services = ServiceScroll.Visibility == Visibility.Visible;
         var software = SoftwareScroll.Visibility == Visibility.Visible;
+        var provisioning = ProvisioningScroll.Visibility == Visibility.Visible;
         CountText.Text = services ? _serviceItems.Count(x => x.Info.Available).ToString()
-            : software ? _softwareItems.Count.ToString() : _items.Count.ToString();
-        EnabledLabel.Text = services ? "已禁用" : software ? "自定义" : "已启用";
+            : software ? _softwareItems.Count.ToString() : provisioning ? _profile.EnableTweaks.Count.ToString() : _items.Count.ToString();
+        EnabledLabel.Text = services ? "已禁用" : software ? "自定义" : provisioning ? "方案软件" : "已启用";
         EnabledText.Text = services
             ? _serviceItems.Count(x => x.Info.Available && x.Info.StartMode == System.ServiceProcess.ServiceStartMode.Disabled).ToString()
             : software ? _softwareItems.Count(x => !x.Entry.IsBuiltIn).ToString()
+            : provisioning ? _profile.Software.Count.ToString()
             : _items.Count(x => x.State == TweakState.Enabled).ToString();
         SnapshotText.Text = _snapshots.List().Count.ToString();
     }
@@ -123,9 +136,11 @@ public partial class MainWindow : Window
         _category = category;
         var services = _category == "服务管理";
         var software = _category == "软件下载";
-        TweakScroll.Visibility = services || software ? Visibility.Collapsed : Visibility.Visible;
+        var provisioning = _category == "开荒方案";
+        TweakScroll.Visibility = services || software || provisioning ? Visibility.Collapsed : Visibility.Visible;
         ServiceScroll.Visibility = services ? Visibility.Visible : Visibility.Collapsed;
         SoftwareScroll.Visibility = software ? Visibility.Visible : Visibility.Collapsed;
+        ProvisioningScroll.Visibility = provisioning ? Visibility.Visible : Visibility.Collapsed;
         PageTitle.Text = _category == "全部" ? "系统调优" : _category;
         _view.Refresh();
         _serviceView.Refresh();
@@ -253,8 +268,7 @@ public partial class MainWindow : Window
     private async void DownloadSoftware_Click(object sender, RoutedEventArgs e)
     {
         var item = (SoftwareItem)((Button)sender).Tag;
-        var uri = new Uri(item.Entry.DownloadUrl);
-        if (MessageBox.Show($"下载“{item.Entry.Name}”？\n\n来源：{uri.Host}\n保存到：{_softwareDownloader.DownloadDirectory}\n\nWinPilot 只保存文件，不会自动运行。",
+        if (MessageBox.Show($"下载“{item.Entry.Name}”？\n\n来源：{item.Entry.Source}\n保存到：{_softwareDownloader.DownloadDirectory}\n\n下载完成后仍需单独确认才能安装。",
             "确认下载", MessageBoxButton.OKCancel, MessageBoxImage.Information) != MessageBoxResult.OK) return;
         item.IsBusy = true;
         item.StatusText = "正在连接…";
@@ -269,6 +283,7 @@ public partial class MainWindow : Window
                     : $"已下载 {FormatBytes(p.BytesReceived)}";
             });
             var result = await _softwareDownloader.DownloadAsync(item.Entry, progress);
+            item.DownloadedFilePath = result.FilePath;
             item.ProgressValue = 100;
             item.StatusForeground = (Brush)FindResource("Accent");
             item.StatusText = $"下载完成 · {Path.GetFileName(result.FilePath)} · SHA-256 {result.Sha256[..12]}…";
@@ -282,6 +297,50 @@ public partial class MainWindow : Window
             item.StatusText = "下载失败：" + ex.Message;
         }
         finally { item.IsBusy = false; }
+    }
+
+    private void InstallSoftware_Click(object sender, RoutedEventArgs e)
+    {
+        var item = (SoftwareItem)((Button)sender).Tag;
+        if (string.IsNullOrWhiteSpace(item.DownloadedFilePath) || !File.Exists(item.DownloadedFilePath))
+        {
+            MessageBox.Show("请先下载该软件。", "WinPilot", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var expectedHash = string.IsNullOrWhiteSpace(item.Entry.Sha256) ? "未配置（建议在 JSON 中填写）" : item.Entry.Sha256;
+        if (MessageBox.Show($"运行安装程序？\n\n软件：{item.Entry.Name}\n文件：{item.DownloadedFilePath}\n方式：{InstallerLauncher.Describe(item.Entry)}\n预期 SHA-256：{expectedHash}\n\n即将启动外部安装程序。",
+            "安装确认", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK) return;
+        try
+        {
+            InstallerLauncher.Launch(item.Entry, item.DownloadedFilePath);
+            StatusText.Text = $"已启动 {item.Entry.Name} 安装程序。";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "无法启动安装程序", MessageBoxButton.OK, MessageBoxImage.Warning);
+            StatusText.Text = ex.Message;
+        }
+    }
+
+    private void EditSoftwareConfig_Click(object sender, RoutedEventArgs e)
+    {
+        _softwareStore.EnsureCatalog();
+        Process.Start(new ProcessStartInfo("notepad.exe", _softwareStore.CatalogPath) { UseShellExecute = true });
+        StatusText.Text = "配置已在记事本中打开；保存后点击“重新加载配置”。";
+    }
+
+    private void ReloadSoftwareConfig_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            ReloadSoftwareCatalog();
+            StatusText.Text = "软件配置已重新加载。";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "配置格式有误", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private void DeleteSoftware_Click(object sender, RoutedEventArgs e)
@@ -304,9 +363,113 @@ public partial class MainWindow : Window
     private void ReloadSoftwareCatalog()
     {
         _softwareItems.Clear();
-        foreach (var entry in _softwareStore.LoadAll()) _softwareItems.Add(new SoftwareItem(entry));
+        foreach (var entry in _softwareStore.LoadAll(true)) _softwareItems.Add(new SoftwareItem(entry));
         _softwareView.Refresh();
+        ReloadProfileView();
         UpdateSummary();
+    }
+
+    private void EditProfile_Click(object sender, RoutedEventArgs e)
+    {
+        _profileStore.EnsureProfile();
+        Process.Start(new ProcessStartInfo("notepad.exe", _profileStore.ProfilePath) { UseShellExecute = true });
+        StatusText.Text = "方案已在记事本中打开；保存后点击“重新加载”。";
+    }
+
+    private void ReloadProfile_Click(object sender, RoutedEventArgs e)
+    {
+        try { ReloadProfileView(); StatusText.Text = "开荒方案已重新加载。"; }
+        catch (Exception ex) { MessageBox.Show(ex.Message, "方案格式有误", MessageBoxButton.OK, MessageBoxImage.Warning); }
+    }
+
+    private void ReloadProfileView()
+    {
+        _profile = _profileStore.Load();
+        var tweaks = _profile.EnableTweaks.Select(id => TweakCatalog.All.FirstOrDefault(x => x.Id.Equals(id, StringComparison.OrdinalIgnoreCase))?.Title ?? $"未知 ID：{id}");
+        var services = _profile.DisableServices.Select(id => OptionalServiceCatalog.All.FirstOrDefault(x => x.ServiceName.Equals(id, StringComparison.OrdinalIgnoreCase))?.DisplayName ?? $"未知 ID：{id}");
+        var software = _profile.Software.Select(id => _softwareItems.FirstOrDefault(x => x.Entry.Id.Equals(id, StringComparison.OrdinalIgnoreCase))?.Entry.Name ?? $"未知 ID：{id}");
+        ProfileNameText.Text = _profile.Name;
+        ProfileTweaksText.Text = JoinPreview(tweaks);
+        ProfileServicesText.Text = JoinPreview(services);
+        ProfileSoftwareText.Text = JoinPreview(software);
+        var unknown = _profile.EnableTweaks.Count(id => !TweakCatalog.All.Any(x => x.Id.Equals(id, StringComparison.OrdinalIgnoreCase)))
+            + _profile.DisableServices.Count(id => !OptionalServiceCatalog.All.Any(x => x.ServiceName.Equals(id, StringComparison.OrdinalIgnoreCase)))
+            + _profile.Software.Count(id => !_softwareItems.Any(x => x.Entry.Id.Equals(id, StringComparison.OrdinalIgnoreCase)));
+        ProfileWarningsText.Text = unknown == 0 ? "方案检查通过。系统配置会创建回滚快照；软件下载后不会自动安装。" : $"发现 {unknown} 个未知 ID，这些项目会被跳过。";
+        UpdateSummary();
+    }
+
+    private void CaptureProfile_Click(object sender, RoutedEventArgs e)
+    {
+        if (MessageBox.Show("用当前检测到的已启用设置和已禁用服务覆盖 profile.json？\n\n软件清单会保留现有方案；程序不会尝试猜测电脑中已安装的软件。",
+            "捕获本机状态", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        _profile.EnableTweaks = _items.Where(x => x.State == TweakState.Enabled).Select(x => x.Definition.Id).ToList();
+        _profile.DisableServices = _serviceItems.Where(x => x.Info.Available && x.Info.StartMode == System.ServiceProcess.ServiceStartMode.Disabled)
+            .Select(x => x.Definition.ServiceName).ToList();
+        _profileStore.Save(_profile);
+        ReloadProfileView();
+        StatusText.Text = "本机系统状态已保存到便携方案。";
+    }
+
+    private async void ApplyProfile_Click(object sender, RoutedEventArgs e)
+    {
+        var tweaks = _profile.EnableTweaks.Select(id => TweakCatalog.All.FirstOrDefault(x => x.Id.Equals(id, StringComparison.OrdinalIgnoreCase))).Where(x => x is not null).Cast<TweakDefinition>().ToArray();
+        var services = _profile.DisableServices.Select(id => OptionalServiceCatalog.All.FirstOrDefault(x => x.ServiceName.Equals(id, StringComparison.OrdinalIgnoreCase))).Where(x => x is not null).Cast<ServiceDefinition>().ToArray();
+        if ((services.Length > 0 || tweaks.Any(x => x.RequiresAdmin)) && !RegistryTweakEngine.IsAdministrator())
+        {
+            MessageBox.Show("此方案包含管理员级设置或服务变更，请先点击右上角“管理员运行”。", "需要管理员权限", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        if (MessageBox.Show($"应用“{_profile.Name}”的系统配置？\n\n启用设置：{tweaks.Length} 项\n禁用服务：{services.Length} 项\n\n每项变更前都会保存快照；软件不会在此步骤安装。",
+            "方案执行预览", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK) return;
+        var failures = new List<string>();
+        foreach (var tweak in tweaks)
+        {
+            try { StatusText.Text = $"正在应用：{tweak.Title}…"; await Task.Run(() => _engine.Apply(tweak, true)); }
+            catch (Exception ex) { failures.Add($"{tweak.Title}：{ex.Message}"); }
+        }
+        foreach (var service in services)
+        {
+            try { StatusText.Text = $"正在禁用服务：{service.DisplayName}…"; await Task.Run(() => _serviceEngine.Disable(service)); }
+            catch (Exception ex) { failures.Add($"{service.DisplayName}：{ex.Message}"); }
+        }
+        await RefreshStatesAsync();
+        StatusText.Text = failures.Count == 0 ? "方案中的系统配置已全部应用。" : $"方案执行完成，{failures.Count} 项失败。";
+        if (failures.Count > 0) MessageBox.Show(string.Join("\n", failures), "部分项目未完成", MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
+    private async void DownloadProfileSoftware_Click(object sender, RoutedEventArgs e)
+    {
+        var entries = _profile.Software.Select(id => _softwareItems.FirstOrDefault(x => x.Entry.Id.Equals(id, StringComparison.OrdinalIgnoreCase)))
+            .Where(x => x is not null).Cast<SoftwareItem>().ToArray();
+        if (entries.Length == 0) { MessageBox.Show("方案中没有可识别的软件。", "WinPilot"); return; }
+        if (MessageBox.Show($"依次下载方案中的 {entries.Length} 个软件？\n\n保存到：{_softwareDownloader.DownloadDirectory}\n下载完成后不会自动安装。",
+            "软件下载预览", MessageBoxButton.OKCancel, MessageBoxImage.Information) != MessageBoxResult.OK) return;
+        var failures = new List<string>();
+        foreach (var item in entries)
+        {
+            item.IsBusy = true;
+            try
+            {
+                StatusText.Text = $"正在下载：{item.Entry.Name}…";
+                var progress = new Progress<DownloadProgress>(p => { item.ProgressValue = p.Percentage; item.StatusText = $"已下载 {FormatBytes(p.BytesReceived)}"; });
+                var result = await _softwareDownloader.DownloadAsync(item.Entry, progress);
+                item.DownloadedFilePath = result.FilePath;
+                item.ProgressValue = 100;
+                item.StatusForeground = (Brush)FindResource("Accent");
+                item.StatusText = $"下载完成 · SHA-256 {result.Sha256[..12]}…";
+            }
+            catch (Exception ex) { failures.Add($"{item.Entry.Name}：{ex.Message}"); item.StatusForeground = Brushes.OrangeRed; item.StatusText = "下载失败：" + ex.Message; }
+            finally { item.IsBusy = false; }
+        }
+        StatusText.Text = failures.Count == 0 ? "方案软件已全部下载，可到软件下载页逐个确认安装。" : $"软件下载完成，{failures.Count} 项失败。";
+        if (failures.Count > 0) MessageBox.Show(string.Join("\n", failures), "部分下载失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
+    private static string JoinPreview(IEnumerable<string> values)
+    {
+        var list = values.ToArray();
+        return list.Length == 0 ? "（无）" : string.Join("  ·  ", list);
     }
 
     private static string FormatBytes(long value)
@@ -337,13 +500,20 @@ public sealed class SoftwareItem : INotifyPropertyChanged
     private double _progressValue;
     private string _statusText = "等待下载";
     private Brush _statusForeground = new SolidColorBrush(Color.FromRgb(101, 117, 141));
+    private string? _downloadedFilePath;
     public SoftwareEntry Entry { get; }
     public string Initial => string.IsNullOrWhiteSpace(Entry.Name) ? "?" : Entry.Name[..1].ToUpperInvariant();
     public string SourceLabel => Entry.IsBuiltIn ? "示例目录" : "自定义";
-    public string HostText => Uri.TryCreate(Entry.DownloadUrl, UriKind.Absolute, out var uri) ? $"HTTPS · {uri.Host}" : "地址无效";
-    public string SearchText => $"{Entry.Name} {Entry.Description} {Entry.DownloadUrl}";
-    public bool IsBusy { get => _isBusy; set { _isBusy = value; Changed(); Changed(nameof(CanDownload)); Changed(nameof(DownloadButtonText)); Changed(nameof(ProgressVisibility)); } }
+    public string HostText => Entry.Source.StartsWith(@"\\", StringComparison.Ordinal)
+        ? "LAN 共享 · " + Entry.Source
+        : Uri.TryCreate(Entry.Source, UriKind.Absolute, out var uri) ? $"{uri.Scheme.ToUpperInvariant()} · {uri.Host}" : "地址无效";
+    public string SearchText => $"{Entry.Name} {Entry.Description} {Entry.Source}";
+    public string InstallText => InstallerLauncher.Describe(Entry);
+    public string? DownloadedFilePath { get => _downloadedFilePath; set { _downloadedFilePath = value; Changed(); Changed(nameof(CanInstall)); } }
+    public bool IsBusy { get => _isBusy; set { _isBusy = value; Changed(); Changed(nameof(CanDownload)); Changed(nameof(CanInstall)); Changed(nameof(DownloadButtonText)); Changed(nameof(ProgressVisibility)); } }
     public bool CanDownload => !IsBusy;
+    public bool CanInstall => !IsBusy && Entry.Installer is not null && !string.IsNullOrWhiteSpace(DownloadedFilePath) && File.Exists(DownloadedFilePath);
+    public Visibility InstallVisibility => Entry.Installer is null ? Visibility.Collapsed : Visibility.Visible;
     public string DownloadButtonText => IsBusy ? "下载中…" : "下载";
     public double ProgressValue { get => _progressValue; set { _progressValue = value; Changed(); Changed(nameof(ProgressVisibility)); } }
     public Visibility ProgressVisibility => IsBusy || ProgressValue > 0 ? Visibility.Visible : Visibility.Collapsed;

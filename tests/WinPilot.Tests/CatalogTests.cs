@@ -51,12 +51,36 @@ public class CatalogTests
             SoftwareCatalogStore.BuiltIns.Select(x => x.Id).Distinct().Count());
         Assert.All(SoftwareCatalogStore.BuiltIns, entry =>
         {
-            Assert.True(SoftwareCatalogStore.IsValid(entry.Name, entry.DownloadUrl, out var error), error);
+            Assert.True(SoftwareCatalogStore.IsValid(entry.Name, entry.Source, out var error), error);
             Assert.True(entry.IsBuiltIn);
         });
         Assert.False(SoftwareCatalogStore.IsValid("Unsafe", "http://example.com/app.exe", out _));
+        Assert.True(SoftwareCatalogStore.IsValid("LAN IP", "http://192.168.1.20/apps/tool.exe", out _));
+        Assert.True(SoftwareCatalogStore.IsValid("LAN host", "http://software-server/apps/tool.exe", out _));
+        Assert.True(SoftwareCatalogStore.IsValid("LAN share", @"\\server\software\tool.exe", out _));
         Assert.False(SoftwareCatalogStore.IsValid("Local", "https://localhost/app.exe", out _));
         Assert.False(SoftwareCatalogStore.IsValid("Credential", "https://user:password@example.com/app.exe", out _));
+    }
+
+    [Fact]
+    public void ProvisioningProfileRoundTrips()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "WinPilotTests", Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(root, "profile.json");
+        try
+        {
+            var store = new ProvisioningProfileStore(path);
+            var profile = new ProvisioningProfile { Name = "Office", EnableTweaks = ["show-extensions"], Software = ["vscode"] };
+            store.Save(profile);
+            var restored = store.Load();
+            Assert.Equal("Office", restored.Name);
+            Assert.Equal("show-extensions", Assert.Single(restored.EnableTweaks));
+            Assert.Equal("vscode", Assert.Single(restored.Software));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
     }
 
     [Fact]

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "steam",
+    "name": "Steam",
+    "description": "Valve 官方 Windows 客户端安装程序。",
+    "source": "https://cdn.akamai.steamstatic.com/client/installer/SteamSetup.exe",
+    "fileName": "SteamSetup.exe",
+    "selectedByDefault": false,
+    "isBuiltIn": true,
+    "installer": { "kind": "exe", "arguments": [], "requiresAdmin": true }
+  },
+  {
+    "id": "vscode",
+    "name": "Visual Studio Code",
+    "description": "微软官方最新稳定版 64 位用户安装程序。",
+    "source": "https://update.code.visualstudio.com/latest/win32-x64-user/stable",
+    "fileName": "VSCodeUserSetup-x64.exe",
+    "selectedByDefault": true,
+    "isBuiltIn": true,
+    "installer": { "kind": "exe", "arguments": ["/VERYSILENT", "/NORESTART"], "requiresAdmin": false }
+  },
+  {
+    "id": "chrome",
+    "name": "Google Chrome",
+    "description": "Google 官方最新版在线安装程序。",
+    "source": "https://dl.google.com/chrome/install/latest/chrome_installer.exe",
+    "fileName": "ChromeInstaller.exe",
+    "selectedByDefault": true,
+    "isBuiltIn": true,
+    "installer": { "kind": "exe", "arguments": [], "requiresAdmin": true }
+  }
+]
