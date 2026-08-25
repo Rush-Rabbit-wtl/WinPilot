@@ -1,0 +1,90 @@
+<Window x:Class="WinPilot.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="WinPilot" Height="820" Width="1280" MinHeight="680" MinWidth="1040"
+        WindowStartupLocation="CenterScreen" Background="#0A101C" Foreground="{StaticResource TextPrimary}" FontFamily="Segoe UI">
+    <Grid>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="238"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <Border Grid.Column="0" Background="#0D1524" BorderBrush="{StaticResource Border}" BorderThickness="0,0,1,0">
+            <Grid Margin="20,24">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Border Background="{StaticResource Accent}" CornerRadius="10" Width="42" Height="42"><TextBlock Text="W" Foreground="#071510" FontWeight="Black" FontSize="23" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                        <StackPanel Margin="12,1,0,0"><TextBlock Text="WinPilot" FontSize="21" FontWeight="Bold"/><TextBlock Text="SAFE WINDOWS TUNING" FontSize="9" Foreground="{StaticResource TextMuted}"/></StackPanel>
+                    </StackPanel>
+                    <TextBlock Margin="0,24,0,8" Text="工作区" Foreground="#64748B" FontSize="11" FontWeight="Bold"/>
+                </StackPanel>
+                <StackPanel Grid.Row="1">
+                    <Button Style="{StaticResource NavButton}" Content="⌂  全部设置" Tag="全部" Click="Category_Click"/>
+                    <Button Style="{StaticResource NavButton}" Content="▣  资源管理器" Tag="资源管理器" Click="Category_Click"/>
+                    <Button Style="{StaticResource NavButton}" Content="▰  任务栏" Tag="任务栏" Click="Category_Click"/>
+                    <Button Style="{StaticResource NavButton}" Content="◉  隐私" Tag="隐私" Click="Category_Click"/>
+                    <Button Style="{StaticResource NavButton}" Content="⚡  性能" Tag="性能" Click="Category_Click"/>
+                    <Button Style="{StaticResource NavButton}" Content="◫  服务管理" Tag="服务管理" Click="Category_Click"/>
+                    <Button Style="{StaticResource NavButton}" Content="▦  应用" Tag="应用" Click="Category_Click"/>
+                    <Button Style="{StaticResource NavButton}" Content="↻  更新" Tag="更新" Click="Category_Click"/>
+                </StackPanel>
+                <StackPanel Grid.Row="3">
+                    <Border Background="#111D30" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="10" Padding="12" Margin="0,0,0,12">
+                        <StackPanel><TextBlock Text="安全策略" Foreground="{StaticResource Accent}" FontWeight="Bold"/><TextBlock Text="每次修改均先创建 JSON 快照；写入失败会立即回滚。" TextWrapping="Wrap" Foreground="{StaticResource TextMuted}" FontSize="11" Margin="0,5,0,0"/></StackPanel>
+                    </Border>
+                    <TextBlock Text="v0.2.0 · .NET 8" Foreground="#526078" FontSize="10"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+        <Grid Grid.Column="1" Margin="30,24,30,22">
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="390"/></Grid.ColumnDefinitions>
+                <StackPanel><TextBlock x:Name="PageTitle" Text="系统调优" FontSize="29" FontWeight="Bold"/><TextBlock Text="检查当前状态，预览影响，然后按需应用。" Foreground="{StaticResource TextMuted}" Margin="0,5,0,0"/></StackPanel>
+                <TextBox x:Name="SearchBox" Grid.Column="1" Height="42" VerticalContentAlignment="Center" TextChanged="SearchBox_TextChanged" ToolTip="搜索标题、说明或分类"/>
+            </Grid>
+            <Grid Grid.Row="1" Margin="0,22,0,16">
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/><ColumnDefinition Width="1.3*"/></Grid.ColumnDefinitions>
+                <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="16" Margin="0,0,10,0"><StackPanel><TextBlock Text="可用设置" Foreground="{StaticResource TextMuted}"/><TextBlock x:Name="CountText" Text="0" FontSize="24" FontWeight="Bold" Margin="0,4,0,0"/></StackPanel></Border>
+                <Border Grid.Column="1" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="16" Margin="0,0,10,0"><StackPanel><TextBlock x:Name="EnabledLabel" Text="已启用" Foreground="{StaticResource TextMuted}"/><TextBlock x:Name="EnabledText" Text="0" Foreground="{StaticResource Accent}" FontSize="24" FontWeight="Bold" Margin="0,4,0,0"/></StackPanel></Border>
+                <Border Grid.Column="2" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="16" Margin="0,0,10,0"><StackPanel><TextBlock Text="本地快照" Foreground="{StaticResource TextMuted}"/><TextBlock x:Name="SnapshotText" Text="0" FontSize="24" FontWeight="Bold" Margin="0,4,0,0"/></StackPanel></Border>
+                <Border Grid.Column="3" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="16">
+                    <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="当前权限" Foreground="{StaticResource TextMuted}"/><TextBlock x:Name="AdminText" Text="标准用户" FontSize="16" FontWeight="Bold" Margin="0,5,0,0"/></StackPanel><Button x:Name="ElevateButton" Grid.Column="1" Content="管理员运行" Click="Elevate_Click" Padding="11,7"/></Grid>
+                </Border>
+            </Grid>
+            <Border Grid.Row="2" Background="#122038" BorderBrush="#294365" BorderThickness="1" CornerRadius="9" Padding="12,9" Margin="0,0,0,12"><TextBlock Foreground="#B8C9E1" Text="提示：WinPilot 不禁用 Defender、SmartScreen、UAC，也不强制删除系统应用。中风险设置应用前会再次确认。"/></Border>
+            <ScrollViewer x:Name="TweakScroll" Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl x:Name="TweakList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="18" Margin="0,0,0,11">
+                                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal"><TextBlock Text="{Binding Definition.Title}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/><Border Background="#21324B" CornerRadius="10" Padding="8,3" Margin="10,0,0,0"><TextBlock Text="{Binding Definition.Category}" FontSize="10" Foreground="#AFC4DD"/></Border><Border Background="{Binding RiskBackground}" CornerRadius="10" Padding="8,3" Margin="6,0,0,0"><TextBlock Text="{Binding RiskText}" FontSize="10" Foreground="{Binding RiskForeground}"/></Border><Border Background="{Binding StateBackground}" CornerRadius="10" Padding="8,3" Margin="6,0,0,0"><TextBlock Text="{Binding StateText}" FontSize="10" Foreground="{Binding StateForeground}"/></Border></StackPanel>
+                                        <TextBlock Text="{Binding Definition.Description}" Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="0,8,20,0"/><TextBlock Text="{Binding DetailText}" Foreground="#65758D" FontSize="10" Margin="0,7,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"><Button Content="应用" Click="Apply_Click" Tag="{Binding}" Background="{StaticResource AccentDark}" BorderBrush="#2C685B" Margin="0,0,8,0"/><Button Content="恢复" Click="RestoreDefault_Click" Tag="{Binding}"/></StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+            <ScrollViewer x:Name="ServiceScroll" Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
+                <ItemsControl x:Name="ServiceList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="12" Padding="18" Margin="0,0,0,11">
+                                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal"><TextBlock Text="{Binding Definition.DisplayName}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/><Border Background="#21324B" CornerRadius="10" Padding="8,3" Margin="10,0,0,0"><TextBlock Text="{Binding Definition.ServiceName}" FontSize="10" Foreground="#AFC4DD"/></Border><Border Background="{Binding RiskBackground}" CornerRadius="10" Padding="8,3" Margin="6,0,0,0"><TextBlock Text="{Binding RiskText}" FontSize="10" Foreground="{Binding RiskForeground}"/></Border><Border Background="{Binding StateBackground}" CornerRadius="10" Padding="8,3" Margin="6,0,0,0"><TextBlock Text="{Binding StateText}" FontSize="10" Foreground="{Binding StateForeground}"/></Border></StackPanel>
+                                        <TextBlock Text="{Binding Definition.Description}" Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" Margin="0,8,20,0"/><TextBlock Text="{Binding DetailText}" Foreground="#65758D" FontSize="10" Margin="0,7,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"><Button Content="禁用" Click="DisableService_Click" Tag="{Binding}" Background="#4A3618" BorderBrush="#765724" Margin="0,0,8,0"/><Button Content="按快照恢复" Click="RestoreService_Click" Tag="{Binding}" IsEnabled="{Binding HasSnapshot}"/></StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+            <Grid Grid.Row="4" Margin="0,14,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock x:Name="StatusText" Text="准备就绪" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/><StackPanel Grid.Column="1" Orientation="Horizontal"><Button Content="打开快照目录" Click="OpenSnapshots_Click" Margin="0,0,8,0"/><Button Content="回滚最近更改" Click="RollbackLatest_Click" Margin="0,0,8,0"/><Button Content="重启资源管理器" Click="RestartExplorer_Click"/></StackPanel></Grid>
+        </Grid>
+    </Grid>
+</Window>
